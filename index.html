@@ -3,38 +3,25 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Static Motion-Pic | Cinematic Video Generator</title>
-    <!-- Tailwind CSS untuk Styling Cepat & Responsif -->
+    <title>Static Motion-Pic V2.1 | FFmpeg & Custom Fonts</title>
+    
+    <!-- Script Hack untuk SharedArrayBuffer (Wajib ada file coi-serviceworker.js di folder yang sama) -->
+    <script src="coi-serviceworker.js"></script>
+
+    <!-- Tailwind CSS -->
     <script src="https://cdn.tailwindcss.com"></script>
+    
+    <!-- FFmpeg.wasm -->
+    <script src="https://unpkg.com/@ffmpeg/ffmpeg@0.11.6/dist/ffmpeg.min.js"></script>
+    <script src="https://unpkg.com/@ffmpeg/core@0.11.6/dist/ffmpeg-core.js"></script>
+
     <style>
         @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;800&display=swap');
         
-        body {
-            font-family: 'Inter', sans-serif;
-            background-color: #0f172a;
-            color: #e2e8f0;
-        }
-
-        /* Custom Scrollbar */
-        ::-webkit-scrollbar {
-            width: 8px;
-        }
-        ::-webkit-scrollbar-track {
-            background: #1e293b; 
-        }
-        ::-webkit-scrollbar-thumb {
-            background: #475569; 
-            border-radius: 4px;
-        }
-
-        .drop-zone {
-            transition: all 0.3s ease;
-            background-image: url("data:image/svg+xml,%3csvg width='100%25' height='100%25' xmlns='http://www.w3.org/2000/svg'%3e%3crect width='100%25' height='100%25' fill='none' rx='16' ry='16' stroke='%23475569FF' stroke-width='2' stroke-dasharray='12%2c 12' stroke-dashoffset='0' stroke-linecap='square'/%3e%3c/svg%3e");
-        }
-        .drop-zone.drag-over {
-            background-color: rgba(59, 130, 246, 0.1);
-            background-image: url("data:image/svg+xml,%3csvg width='100%25' height='100%25' xmlns='http://www.w3.org/2000/svg'%3e%3crect width='100%25' height='100%25' fill='none' rx='16' ry='16' stroke='%233B82F6FF' stroke-width='3' stroke-dasharray='12%2c 12' stroke-dashoffset='0' stroke-linecap='square'/%3e%3c/svg%3e");
-        }
+        body { font-family: 'Inter', sans-serif; background-color: #0f172a; color: #e2e8f0; }
+        ::-webkit-scrollbar { width: 8px; }
+        ::-webkit-scrollbar-track { background: #1e293b; }
+        ::-webkit-scrollbar-thumb { background: #475569; border-radius: 4px; }
 
         .glass-panel {
             background: rgba(30, 41, 59, 0.7);
@@ -42,486 +29,667 @@
             border: 1px solid rgba(255, 255, 255, 0.1);
         }
         
-        /* Loading Animation */
         .loader {
             border: 3px solid #f3f3f3;
             border-radius: 50%;
             border-top: 3px solid #3b82f6;
-            width: 20px;
-            height: 20px;
-            -webkit-animation: spin 1s linear infinite; /* Safari */
+            width: 20px; height: 20px;
             animation: spin 1s linear infinite;
         }
-        @keyframes spin {
-            0% { transform: rotate(0deg); }
-            100% { transform: rotate(360deg); }
-        }
+        @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
     </style>
 </head>
-<body class="min-h-screen flex flex-col items-center justify-center p-4">
+<body class="min-h-screen flex flex-col items-center justify-between p-4">
+
+    <!-- Loading Overlay untuk FFmpeg -->
+    <div id="ffmpegLoader" class="fixed inset-0 z-50 bg-slate-900 flex flex-col items-center justify-center text-center">
+        <div class="loader w-12 h-12 mb-4 border-t-emerald-500"></div>
+        <h2 class="text-xl font-bold text-white">Memuat Core Video Engine...</h2>
+        <p class="text-slate-400 text-sm mt-2 max-w-md">Mengunduh FFmpeg.wasm (~25MB).<br>Pastikan koneksi internet stabil.</p>
+    </div>
 
     <!-- Main Container -->
-    <main class="w-full max-w-5xl glass-panel rounded-2xl shadow-2xl overflow-hidden p-6 md:p-8">
+    <main class="w-full max-w-6xl glass-panel rounded-2xl shadow-2xl overflow-hidden p-6 md:p-8 mb-8">
         
-        <!-- Header -->
-        <header class="text-center mb-8">
+        <header class="text-center mb-8 border-b border-slate-700 pb-6">
             <h1 class="text-4xl md:text-5xl font-extrabold text-transparent bg-clip-text bg-gradient-to-r from-blue-400 to-emerald-400 mb-2">
-                Static Motion-Pic
+                Static Motion-Pic <span class="text-xs align-top bg-slate-700 text-white px-1 rounded">V2.1</span>
             </h1>
-            <p class="text-slate-400 text-sm md:text-base">
-                Ubah gambar diam menjadi video sinematik (Ken Burns Effect) secara instan.
-                <br>
-                <span class="text-xs text-emerald-500 font-mono bg-emerald-900/30 px-2 py-1 rounded mt-2 inline-block">Zero Server Latency • Browser Native Rendering</span>
+            <p class="text-slate-400 text-sm">
+                Cinematic Video Generator dengan <span class="text-emerald-400 font-bold">Hard-Subtitles & Custom Fonts</span>.
             </p>
         </header>
 
-        <div class="grid grid-cols-1 lg:grid-cols-2 gap-8">
+        <div class="grid grid-cols-1 lg:grid-cols-12 gap-8">
             
-            <!-- Left Column: Input & Settings -->
-            <div class="space-y-6">
-                <!-- Drop Zone -->
-                <div id="dropZone" class="drop-zone w-full h-48 rounded-2xl flex flex-col items-center justify-center cursor-pointer hover:bg-slate-800/50">
-                    <input type="file" id="fileInput" multiple accept="image/*" class="hidden">
-                    <div class="text-center p-6 pointer-events-none">
-                        <svg class="w-10 h-10 text-slate-400 mx-auto mb-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"></path></svg>
-                        <p class="text-base font-semibold text-slate-300">Drag & Drop Gambar</p>
-                        <p class="text-xs text-slate-500 mt-1">atau klik untuk memilih dari komputer</p>
+            <!-- Left Column: Inputs (5 Columns) -->
+            <div class="lg:col-span-5 space-y-6 h-[75vh] overflow-y-auto pr-2 custom-scrollbar">
+                
+                <!-- 1. Image Manager -->
+                <div class="bg-slate-800/50 p-4 rounded-xl border border-slate-700">
+                    <div class="flex justify-between items-center mb-3">
+                        <h3 class="text-sm font-semibold text-blue-400">1. Aset Gambar</h3>
+                        <button id="clearImagesBtn" class="text-xs text-red-400 hover:text-red-300 underline">Hapus Semua</button>
                     </div>
-                </div>
-
-                <!-- Separator -->
-                <div class="flex items-center gap-4">
-                    <div class="h-px bg-slate-700 flex-1"></div>
-                    <span class="text-[10px] text-slate-500 uppercase font-bold tracking-wider">Atau via Link</span>
-                    <div class="h-px bg-slate-700 flex-1"></div>
-                </div>
-
-                <!-- URL Input -->
-                <div class="bg-slate-800/30 p-3 rounded-xl border border-slate-700/50">
-                    <label class="block text-xs text-slate-400 mb-2 font-medium">Muat Gambar dari URL (Direct Link)</label>
-                    <div class="flex gap-2">
-                        <input type="url" id="urlInput" placeholder="https://contoh.com/gambar.jpg" class="flex-1 bg-slate-900 border border-slate-700 rounded-lg p-2 text-sm focus:border-blue-500 focus:outline-none transition text-slate-200 placeholder-slate-600">
-                        <button id="addUrlBtn" class="bg-slate-700 hover:bg-slate-600 text-white px-4 py-2 rounded-lg text-sm font-semibold transition border border-slate-600">
-                            Tambah
-                        </button>
-                    </div>
-                    <p class="text-[10px] text-amber-500/80 mt-2 italic flex items-start gap-1">
-                        <svg class="w-3 h-3 mt-0.5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
-                        <span>Link harus mengarah langsung ke file gambar (bukan viewer Google Drive). Pastikan server gambar mengizinkan akses pihak ketiga (CORS Enabled).</span>
-                    </p>
-                </div>
-
-                <!-- File List Preview -->
-                <div id="fileListContainer" class="hidden">
-                    <h3 class="text-sm font-semibold text-slate-400 mb-2">Antrean Gambar (<span id="fileCount">0</span>)</h3>
-                    <div id="fileList" class="flex gap-2 overflow-x-auto pb-2 scrollbar-thin scrollbar-thumb-slate-700">
-                        <!-- Thumbnails will be injected here -->
-                    </div>
-                </div>
-
-                <!-- Settings -->
-                <div class="bg-slate-800/50 p-4 rounded-xl border border-slate-700/50">
-                    <h3 class="text-sm font-semibold text-blue-400 mb-3 flex items-center">
-                        <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"></path><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"></path></svg>
-                        Konfigurasi Render
-                    </h3>
                     
-                    <div class="grid grid-cols-2 gap-4">
+                    <div id="dropZone" class="w-full h-32 border-2 border-dashed border-slate-600 hover:border-blue-500 rounded-xl flex flex-col items-center justify-center cursor-pointer transition bg-slate-900/50 mb-3">
+                        <input type="file" id="fileInput" multiple accept="image/*" class="hidden">
+                        <span class="text-xs text-slate-400">Klik / Drop Gambar di sini</span>
+                    </div>
+
+                    <div class="flex gap-2 mb-3">
+                        <input type="url" id="urlInput" placeholder="https://..." class="flex-1 bg-slate-900 border border-slate-700 rounded px-2 py-1 text-xs text-white">
+                        <button id="addUrlBtn" class="bg-slate-700 px-3 py-1 rounded text-xs hover:bg-slate-600 text-white">Add Link</button>
+                    </div>
+
+                    <div id="fileList" class="flex flex-wrap gap-2 max-h-32 overflow-y-auto">
+                        <span class="text-xs text-slate-600 w-full text-center py-2 italic" id="emptyMsg">Belum ada gambar</span>
+                    </div>
+                </div>
+
+                <!-- 2. Audio & Timing -->
+                <div class="bg-slate-800/50 p-4 rounded-xl border border-slate-700">
+                    <h3 class="text-sm font-semibold text-blue-400 mb-3">2. Audio & Durasi</h3>
+                    <div class="space-y-3">
                         <div>
-                            <label class="block text-xs text-slate-400 mb-1">Durasi per Slide (detik)</label>
-                            <input type="number" id="durationInput" value="4" min="2" max="10" class="w-full bg-slate-900 border border-slate-700 rounded p-2 text-sm focus:border-blue-500 focus:outline-none transition text-white">
+                            <label class="block text-xs text-slate-400 mb-1">File Audio (Opsional)</label>
+                            <input type="file" id="audioInput" accept="audio/*" class="w-full text-xs text-slate-400 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-xs file:font-semibold file:bg-slate-700 file:text-white hover:file:bg-slate-600">
                         </div>
+                        <div class="grid grid-cols-2 gap-2">
+                            <div>
+                                <label class="block text-xs text-slate-400 mb-1">Durasi Slide (dtk)</label>
+                                <input type="number" id="slideDuration" value="4" min="2" class="w-full bg-slate-900 border border-slate-700 rounded px-2 py-1 text-sm text-white">
+                            </div>
+                            <div class="bg-slate-900 p-2 rounded border border-slate-700 flex flex-col justify-center">
+                                <span class="text-[10px] text-slate-500 uppercase">Estimasi Total</span>
+                                <span id="totalDurationDisplay" class="text-emerald-400 font-mono text-sm">00:00</span>
+                            </div>
+                        </div>
+                        <p id="audioWarning" class="text-[10px] text-amber-500 hidden italic"></p>
+                    </div>
+                </div>
+
+                <!-- 3. Subtitles & Fonts -->
+                <div class="bg-slate-800/50 p-4 rounded-xl border border-slate-700">
+                    <h3 class="text-sm font-semibold text-blue-400 mb-3">3. Subtitle (Hard-Sub)</h3>
+                    
+                    <div class="space-y-4">
+                        <!-- Input SRT -->
                         <div>
-                            <label class="block text-xs text-slate-400 mb-1">Resolusi Output</label>
-                            <select id="resolutionInput" class="w-full bg-slate-900 border border-slate-700 rounded p-2 text-sm focus:border-blue-500 focus:outline-none transition text-white">
-                                <option value="1080">1080p (FHD)</option>
-                                <option value="720">720p (HD)</option>
-                                <option value="480">480p (SD)</option>
-                            </select>
+                            <label class="block text-xs text-slate-400 mb-1">File Subtitle (.srt)</label>
+                            <input type="file" id="srtInput" accept=".srt" class="w-full text-xs text-slate-400 file:mr-4 file:py-1 file:px-3 file:rounded file:border-0 file:bg-slate-700 file:text-white">
+                        </div>
+                        
+                        <!-- Font Selection Logic -->
+                        <div class="border-t border-slate-700 pt-3">
+                            <label class="block text-xs text-emerald-400 font-bold mb-2">Pengaturan Font</label>
+                            
+                            <!-- Dropdown Pilihan Font -->
+                            <div class="mb-2">
+                                <label class="block text-[10px] text-slate-500 mb-1">Pilih Font Tersedia:</label>
+                                <select id="fontSelect" class="w-full bg-slate-900 border border-slate-700 rounded px-2 py-1 text-xs text-white">
+                                    <!-- Opsi akan diisi oleh JavaScript -->
+                                </select>
+                            </div>
+
+                            <!-- Upload Font Manual -->
+                            <div>
+                                <label class="block text-[10px] text-slate-500 mb-1">Atau Upload Font Sendiri (.ttf):</label>
+                                <input type="file" id="fontInput" accept=".ttf" class="w-full text-xs text-slate-400 file:mr-4 file:py-1 file:px-3 file:rounded file:border-0 file:bg-slate-700 file:text-white">
+                            </div>
                         </div>
                     </div>
                 </div>
 
-                <!-- Action Button -->
-                <button id="generateBtn" disabled class="w-full py-4 rounded-xl font-bold text-white shadow-lg transition-all transform active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 flex justify-center items-center gap-2">
-                    <span>Generate Cinematic Video</span>
+                <button id="generateBtn" disabled class="w-full py-4 rounded-xl font-bold text-white shadow-lg bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 disabled:opacity-50 disabled:cursor-not-allowed transition flex justify-center items-center gap-2">
+                    GENERATE VIDEO
                 </button>
-
-                <!-- Progress Bar -->
-                <div id="progressContainer" class="hidden space-y-2">
-                    <div class="flex justify-between text-xs text-slate-400">
-                        <span id="statusText">Inisialisasi...</span>
-                        <span id="progressPercent">0%</span>
-                    </div>
-                    <div class="w-full bg-slate-800 rounded-full h-2.5 overflow-hidden">
-                        <div id="progressBar" class="bg-blue-500 h-2.5 rounded-full transition-all duration-300" style="width: 0%"></div>
-                    </div>
-                </div>
             </div>
 
             <!-- Right Column: Preview & Output -->
-            <div class="flex flex-col space-y-4">
-                <div class="relative w-full aspect-video bg-black rounded-xl overflow-hidden border border-slate-700 shadow-inner flex items-center justify-center group">
-                    
-                    <!-- Hidden Canvas for Processing -->
+            <div class="lg:col-span-7 flex flex-col space-y-4">
+                <div class="relative w-full aspect-video bg-black rounded-xl overflow-hidden border border-slate-700 shadow-inner flex items-center justify-center">
                     <canvas id="renderCanvas" class="hidden"></canvas>
-                    
-                    <!-- Video Player -->
                     <video id="outputVideo" class="w-full h-full object-contain hidden" controls></video>
                     
-                    <!-- Empty State -->
                     <div id="previewPlaceholder" class="text-center">
                         <div class="animate-pulse text-slate-600">
                             <svg class="w-16 h-16 mx-auto mb-2" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z"></path></svg>
-                            <span class="text-sm font-medium">Area Preview</span>
+                            <span class="text-sm font-medium">Area Preview Video</span>
                         </div>
+                    </div>
+
+                    <div id="processingOverlay" class="absolute inset-0 bg-black/80 z-20 hidden flex-col items-center justify-center p-8 text-center">
+                        <div class="loader w-10 h-10 mb-4"></div>
+                        <h3 class="text-lg font-bold text-white mb-1" id="processStatus">Merender Frame...</h3>
+                        <p class="text-xs text-slate-400 mb-4" id="processDetail">Mohon tunggu, ini memerlukan CPU tinggi.</p>
+                        <div class="w-full bg-slate-800 rounded-full h-2 overflow-hidden max-w-sm">
+                            <div id="progressBar" class="bg-emerald-500 h-2 rounded-full transition-all duration-300" style="width: 0%"></div>
+                        </div>
+                        <p id="progressText" class="text-xs text-emerald-400 mt-2 font-mono">0%</p>
                     </div>
                 </div>
 
-                <!-- Download Area -->
-                <div id="downloadArea" class="hidden p-4 bg-emerald-900/20 border border-emerald-500/30 rounded-xl flex justify-between items-center">
-                    <div class="text-emerald-400 text-sm">
-                        <span class="font-bold">Selesai!</span> Video siap diunduh.
+                <div class="flex-1 bg-black/20 rounded-xl border border-slate-800 p-4 flex flex-col">
+                    <div id="downloadArea" class="hidden flex justify-between items-center mb-4 bg-emerald-900/20 p-3 rounded-lg border border-emerald-500/30">
+                        <span class="text-emerald-400 text-sm font-bold">Rendering Selesai!</span>
+                        <a id="downloadLink" class="bg-emerald-600 hover:bg-emerald-500 text-white text-xs px-4 py-2 rounded font-bold shadow transition">Download MP4</a>
                     </div>
-                    <a id="downloadLink" class="px-4 py-2 bg-emerald-600 hover:bg-emerald-500 text-white text-sm font-bold rounded-lg transition shadow-lg flex items-center gap-2">
-                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"></path></svg>
-                        Download .webm
-                    </a>
-                </div>
-                
-                <!-- Debug/Info Console -->
-                <div class="bg-black/40 p-3 rounded-lg border border-slate-800 h-32 overflow-y-auto text-xs font-mono text-slate-500" id="consoleLog">
-                    <div>> System Ready. Menunggu input...</div>
+                    <div class="text-[10px] text-slate-500 font-mono uppercase mb-1">System Log</div>
+                    <div id="consoleLog" class="flex-1 overflow-y-auto h-24 font-mono text-xs text-slate-400 bg-black/40 p-2 rounded border border-slate-800/50">
+                        <div>> Menunggu inisialisasi FFmpeg...</div>
+                    </div>
                 </div>
             </div>
         </div>
     </main>
 
+    <!-- Footer Credit -->
+    <footer class="text-center text-slate-500 text-xs py-4">
+        <p>Static Motion-Pic &copy; 2024. Dibuat dengan cinta dan kode.</p>
+        <p class="mt-1">
+            <span class="opacity-70">Credits Font:</span> 
+            <!-- Ganti bagian ini sesuai lisensi font yang Anda pakai -->
+            <a href="#" class="hover:text-emerald-400 transition">Roboto by Google</a> • 
+            <a href="#" class="hover:text-emerald-400 transition">Bebas Neue by Ryoichi Tsunekawa</a>
+        </p>
+    </footer>
+
     <script>
-        /**
-         * STATIC MOTION-PIC CORE LOGIC
-         * Menggunakan Canvas API + MediaRecorder API
-         */
-
-        const dropZone = document.getElementById('dropZone');
-        const fileInput = document.getElementById('fileInput');
-        const urlInput = document.getElementById('urlInput');
-        const addUrlBtn = document.getElementById('addUrlBtn');
-        const generateBtn = document.getElementById('generateBtn');
-        const fileListContainer = document.getElementById('fileListContainer');
-        const fileList = document.getElementById('fileList');
-        const fileCountSpan = document.getElementById('fileCount');
+        const { createFFmpeg, fetchFile } = FFmpeg;
         
-        const canvas = document.getElementById('renderCanvas');
-        const ctx = canvas.getContext('2d', { alpha: false }); 
-        const outputVideo = document.getElementById('outputVideo');
-        const previewPlaceholder = document.getElementById('previewPlaceholder');
-        const progressContainer = document.getElementById('progressContainer');
-        const progressBar = document.getElementById('progressBar');
-        const statusText = document.getElementById('statusText');
-        const progressPercent = document.getElementById('progressPercent');
-        const downloadArea = document.getElementById('downloadArea');
-        const downloadLink = document.getElementById('downloadLink');
-        const consoleLog = document.getElementById('consoleLog');
+        /* * =================================================================
+         * [AREA KONFIGURASI FONT PROYEK]
+         * Di sini tempat Anda mendaftarkan font lokal yang ada di komputer/server Anda.
+         * =================================================================
+         */
+        
+        // Bentuk Wadah Font: Array of Objects
+        const availableFonts = [
+            // Opsi 1: Font Sistem (Bawaan Browser)
+            { 
+                name: "Default (Inter/System)", 
+                type: "system", 
+                value: "Inter, sans-serif" 
+            },
+            { 
+                name: "Classic Serif", 
+                type: "system", 
+                value: "Times New Roman, serif" 
+            },
+            { 
+                name: "Coding Monospace", 
+                type: "system", 
+                value: "Courier New, monospace" 
+            },
+            
+            // Opsi 2: Font Lokal (File dalam proyek Anda)
+            // UNCOMMENT bagian di bawah ini jika Anda sudah menaruh file .ttf di folder proyek
+            /*
+            {
+                name: "Bebas Neue (Bold)", 
+                type: "file",
+                url: "fonts/BebasNeue-Regular.ttf", // Pastikan path ini benar!
+                fontFamily: "BebasNeue" // Nama internal untuk CSS/Canvas
+            },
+            {
+                name: "Lobster (Cursive)", 
+                type: "file",
+                url: "assets/fonts/Lobster-Regular.ttf",
+                fontFamily: "Lobster"
+            }
+            */
+        ];
 
-        let images = []; // Menyimpan objek ImageBitmap
+        let activeFont = availableFonts[0].value; // Default font saat ini
+        let ffmpeg = null;
+        let images = []; 
+        let audioFile = null;
+        let subtitleData = [];
         let isProcessing = false;
 
-        // --- Utility Functions ---
+        // --- DOM Elements ---
+        const logEl = document.getElementById('consoleLog');
+        const fileList = document.getElementById('fileList');
+        const emptyMsg = document.getElementById('emptyMsg');
+        const totalDurationEl = document.getElementById('totalDurationDisplay');
+        const audioWarningEl = document.getElementById('audioWarning');
+        const progressBar = document.getElementById('progressBar');
+        const progressText = document.getElementById('progressText');
+        const fontSelect = document.getElementById('fontSelect');
+
+        // --- INIT FONT SELECTOR ---
+        function initFontSelector() {
+            fontSelect.innerHTML = '';
+            availableFonts.forEach((font, index) => {
+                const option = document.createElement('option');
+                option.value = index; // Kita simpan index array sebagai value
+                option.text = font.name;
+                fontSelect.appendChild(option);
+            });
+        }
+        initFontSelector();
+
+        // Listener saat user mengubah dropdown font
+        fontSelect.addEventListener('change', async (e) => {
+            const index = e.target.value;
+            const selected = availableFonts[index];
+
+            if (selected.type === 'system') {
+                activeFont = selected.value;
+                log(`Font diubah ke: ${selected.name}`);
+            } else if (selected.type === 'file') {
+                // Logic memuat font lokal dari URL (folder proyek)
+                try {
+                    log(`Memuat font: ${selected.name}...`);
+                    const fontFace = new FontFace(selected.fontFamily, `url(${selected.url})`);
+                    await fontFace.load();
+                    document.fonts.add(fontFace);
+                    activeFont = selected.fontFamily;
+                    log(`Font berhasil dimuat: ${selected.name}`);
+                } catch (err) {
+                    console.error(err);
+                    log(`Gagal memuat font ${selected.name}. Cek path file!`);
+                    // Fallback ke default
+                    activeFont = "Inter, sans-serif";
+                }
+            }
+        });
+
+        // Listener untuk upload font manual (.ttf)
+        document.getElementById('fontInput').addEventListener('change', async (e) => {
+            const file = e.target.files[0];
+            if (file) {
+                try {
+                    const arrayBuffer = await file.arrayBuffer();
+                    const fontName = 'UploadedFont_' + Date.now();
+                    const fontFace = new FontFace(fontName, arrayBuffer);
+                    await fontFace.load();
+                    document.fonts.add(fontFace);
+                    
+                    // Tambahkan ke dropdown dan pilih otomatis
+                    const newOption = document.createElement('option');
+                    newOption.text = `[Uploaded] ${file.name}`;
+                    newOption.value = 'uploaded_manual';
+                    fontSelect.appendChild(newOption);
+                    fontSelect.value = 'uploaded_manual';
+                    
+                    activeFont = fontName;
+                    log(`Font custom diupload: ${file.name}`);
+                } catch (err) {
+                    log("File font rusak atau tidak didukung.");
+                }
+            }
+        });
+
+        // --- Init FFmpeg ---
+        async function loadFFmpeg() {
+            try {
+                ffmpeg = createFFmpeg({ log: false }); 
+                await ffmpeg.load();
+                document.getElementById('ffmpegLoader').classList.add('hidden');
+                log("FFmpeg Core dimuat. Sistem siap.");
+            } catch (e) {
+                console.error(e);
+                document.getElementById('ffmpegLoader').innerHTML = `
+                    <div class="text-red-500 font-bold">Gagal memuat FFmpeg!</div>
+                    <p class="text-xs text-white mt-2">Pastikan browser mendukung SharedArrayBuffer (coi-serviceworker).</p>
+                `;
+            }
+        }
+        loadFFmpeg();
+
+        // --- Logger ---
         function log(msg) {
             const div = document.createElement('div');
-            const time = new Date().toLocaleTimeString();
-            div.innerHTML = `<span class="text-slate-600">[${time}]</span> ${msg}`;
-            consoleLog.appendChild(div);
-            consoleLog.scrollTop = consoleLog.scrollHeight;
+            div.innerHTML = `<span class="text-slate-600">[${new Date().toLocaleTimeString()}]</span> ${msg}`;
+            logEl.appendChild(div);
+            logEl.scrollTop = logEl.scrollHeight;
         }
 
-        function updateUIState() {
-            fileCountSpan.innerText = images.length;
-            if (images.length > 0) {
-                fileListContainer.classList.remove('hidden');
-                generateBtn.disabled = false;
-                generateBtn.innerText = 'Generate Cinematic Video';
-            } else {
-                generateBtn.disabled = true;
-            }
+        // --- Image Management ---
+        function addImage(bitmap, thumbUrl) {
+            images.push({ bitmap, thumbUrl });
+            renderFileList();
+            updateDurationEstimate();
+            checkReady();
         }
 
-        function addThumbnail(url) {
-            const imgDiv = document.createElement('div');
-            imgDiv.className = 'flex-shrink-0 w-16 h-16 bg-cover bg-center rounded border border-slate-600 relative animate-fade-in';
-            imgDiv.style.backgroundImage = `url(${url})`;
-            fileList.appendChild(imgDiv);
-        }
-
-        // --- Drag & Drop & File Input Handlers ---
-        dropZone.addEventListener('click', () => fileInput.click());
-        dropZone.addEventListener('dragover', (e) => {
-            e.preventDefault();
-            dropZone.classList.add('drag-over');
-        });
-        dropZone.addEventListener('dragleave', () => dropZone.classList.remove('drag-over'));
-        dropZone.addEventListener('drop', (e) => {
-            e.preventDefault();
-            dropZone.classList.remove('drag-over');
-            handleFiles(e.dataTransfer.files);
-        });
-        fileInput.addEventListener('change', (e) => handleFiles(e.target.files));
-
-        async function handleFiles(fileListInput) {
-            if (fileListInput.length === 0) return;
-
-            // Note: Drag & drop usually implies replacing the set in this simple app context,
-            // but we can also treat it as append. For now, let's reset to keep it clean unless requested otherwise.
-            // But since we added URL feature (append style), let's reset here to be safe for "New Project" feel via drop.
-            images = [];
+        function renderFileList() {
             fileList.innerHTML = '';
-            
-            generateBtn.disabled = true;
-            generateBtn.innerHTML = '<div class="loader mr-2"></div> Memuat Gambar...';
-
-            const validFiles = Array.from(fileListInput).filter(file => file.type.startsWith('image/'));
-            
-            if (validFiles.length === 0) {
-                alert("Harap masukkan file gambar yang valid.");
-                updateUIState();
+            if (images.length === 0) {
+                fileList.appendChild(emptyMsg);
                 return;
             }
-
-            log(`Menerima ${validFiles.length} file lokal.`);
-
-            try {
-                for (let i = 0; i < validFiles.length; i++) {
-                    const file = validFiles[i];
-                    
-                    // Thumbnail
-                    const reader = new FileReader();
-                    reader.onload = (e) => addThumbnail(e.target.result);
-                    reader.readAsDataURL(file);
-
-                    // Bitmap
-                    const bitmap = await createImageBitmap(file);
-                    images.push(bitmap);
-                }
-                
-                log("Semua gambar lokal dimuat.");
-                updateUIState();
-
-            } catch (err) {
-                console.error(err);
-                log("Error saat memuat gambar lokal: " + err.message);
-                generateBtn.innerText = 'Error - Reset & Coba Lagi';
-            }
+            images.forEach((img, idx) => {
+                const div = document.createElement('div');
+                div.className = 'w-14 h-14 bg-cover bg-center rounded border border-slate-600 relative group';
+                div.style.backgroundImage = `url(${img.thumbUrl})`;
+                div.innerHTML = `<span class="absolute bottom-0 right-0 bg-black/70 text-white text-[9px] px-1">${idx+1}</span>`;
+                fileList.appendChild(div);
+            });
         }
 
-        // --- URL Input Handler ---
-        addUrlBtn.addEventListener('click', async () => {
-            const url = urlInput.value.trim();
-            if (!url) return;
+        document.getElementById('clearImagesBtn').addEventListener('click', () => {
+            images = [];
+            renderFileList();
+            updateDurationEstimate();
+            checkReady();
+            log("Semua gambar dihapus.");
+        });
 
-            const originalBtnText = addUrlBtn.innerText;
-            addUrlBtn.innerHTML = '<div class="loader w-3 h-3 border-2"></div>'; // Tiny loader
-            addUrlBtn.disabled = true;
-            urlInput.disabled = true;
+        document.getElementById('dropZone').addEventListener('click', () => document.getElementById('fileInput').click());
+        document.getElementById('fileInput').addEventListener('change', async (e) => {
+            const files = Array.from(e.target.files);
+            for (const file of files) {
+                const bitmap = await createImageBitmap(file);
+                const thumbUrl = URL.createObjectURL(file);
+                addImage(bitmap, thumbUrl);
+            }
+            log(`Menambahkan ${files.length} gambar.`);
+            e.target.value = ''; 
+        });
 
-            log(`Mencoba mengunduh gambar dari URL...`);
-
+        document.getElementById('addUrlBtn').addEventListener('click', async () => {
+            const url = document.getElementById('urlInput').value;
+            if(!url) return;
             try {
-                // Fetch sebagai blob
-                const response = await fetch(url);
-                
-                if (!response.ok) {
-                    throw new Error(`HTTP Error ${response.status}`);
-                }
-                
-                const blob = await response.blob();
-                
-                if (!blob.type.startsWith('image/')) {
-                    throw new Error('URL tidak mengarah ke file gambar yang valid (MIME type mismatch).');
-                }
-
-                // Create Bitmap
+                const res = await fetch(url);
+                if (!res.ok) throw new Error("Gagal fetch URL");
+                const blob = await res.blob();
                 const bitmap = await createImageBitmap(blob);
-                images.push(bitmap);
-
-                // Add Thumbnail (create Object URL from blob)
-                const objectUrl = URL.createObjectURL(blob);
-                addThumbnail(objectUrl);
-
-                log("Berhasil memuat gambar dari URL.");
-                urlInput.value = ''; // Clear input
-                updateUIState();
-
-            } catch (err) {
-                console.error(err);
-                const isCors = err.message.includes('Failed to fetch') || err.name === 'TypeError';
-                let alertMsg = `Gagal memuat gambar: ${err.message}`;
-                
-                if (isCors) {
-                    alertMsg = "Gagal mengakses gambar (CORS Error).\n\nKemungkinan penyebab:\n1. Server website tujuan memblokir akses langsung dari aplikasi luar.\n2. Link bukan direct link ke file gambar.\n\nSolusi: Gunakan gambar dari sumber yang mendukung CORS (seperti Unsplash, Pexels) atau upload file secara manual.";
-                    log("Gagal: CORS Policy blocking.");
-                } else {
-                    log(`Gagal: ${err.message}`);
-                }
-                
-                alert(alertMsg);
-            } finally {
-                addUrlBtn.innerText = originalBtnText;
-                addUrlBtn.disabled = false;
-                urlInput.disabled = false;
-                urlInput.focus();
+                const thumbUrl = URL.createObjectURL(blob);
+                addImage(bitmap, thumbUrl);
+                document.getElementById('urlInput').value = '';
+                log("Gambar dari URL ditambahkan.");
+            } catch(e) {
+                alert("Gagal memuat gambar dari URL (CORS error?).");
             }
         });
 
-        // --- Core Rendering Logic ---
-
-        generateBtn.addEventListener('click', async () => {
-            if (isProcessing || images.length === 0) return;
-            startProcessing();
+        // --- Audio Handler ---
+        document.getElementById('audioInput').addEventListener('change', (e) => {
+            const file = e.target.files[0];
+            if (file) {
+                audioFile = file;
+                const audioObj = new Audio(URL.createObjectURL(file));
+                audioObj.onloadedmetadata = () => {
+                    audioFile.duration = audioObj.duration;
+                    updateDurationEstimate();
+                    log(`Audio dimuat: ${file.name} (${audioObj.duration.toFixed(1)}s)`);
+                };
+            } else {
+                audioFile = null;
+                updateDurationEstimate();
+            }
         });
 
-        async function startProcessing() {
+        // --- Subtitle Parser ---
+        function parseSRT(text) {
+            // PERBAIKAN: Menggunakan new RegExp() dengan string escaping untuk menghindari error parser pada regex literal
+            const pattern = new RegExp("(\\d+)\\n(\\d{2}:\\d{2}:\\d{2},\\d{3}) --> (\\d{2}:\\d{2}:\\d{2},\\d{3})\\n([\\s\\S]*?)(?=\\n\\n|\\n*$)", "g");
+            
+            const result = [];
+            let match;
+            while ((match = pattern.exec(text)) !== null) {
+                result.push({
+                    start: timeToSeconds(match[2]),
+                    end: timeToSeconds(match[3]),
+                    text: match[4].trim()
+                });
+            }
+            return result;
+        }
+
+        function timeToSeconds(timeString) {
+            const [h, m, s] = timeString.split(':');
+            const [sec, ms] = s.split(',');
+            return parseInt(h) * 3600 + parseInt(m) * 60 + parseInt(sec) + parseInt(ms) / 1000;
+        }
+
+        document.getElementById('srtInput').addEventListener('change', (e) => {
+            const file = e.target.files[0];
+            if (file) {
+                const reader = new FileReader();
+                reader.onload = (evt) => {
+                    subtitleData = parseSRT(evt.target.result);
+                    log(`Subtitle dimuat: ${subtitleData.length} baris.`);
+                };
+                reader.readAsText(file);
+            } else {
+                subtitleData = [];
+            }
+        });
+
+        // --- Duration Calculation Logic ---
+        function updateDurationEstimate() {
+            const slideDur = parseInt(document.getElementById('slideDuration').value) || 4;
+            const imgCount = images.length;
+            let totalSec = imgCount * slideDur;
+            let warning = "";
+
+            if (audioFile && audioFile.duration) {
+                const audioSec = audioFile.duration;
+                if (totalSec > audioSec) {
+                    totalSec = audioSec + 5; 
+                    warning = "Video > Audio: Durasi dipotong menjadi Audio + 5 detik.";
+                } else if (totalSec < audioSec) {
+                    totalSec = audioSec; 
+                    warning = "Video < Audio: Layar hitam akan ditambahkan di akhir.";
+                }
+            }
+
+            const min = Math.floor(totalSec / 60).toString().padStart(2, '0');
+            const sec = Math.floor(totalSec % 60).toString().padStart(2, '0');
+            totalDurationEl.innerText = `${min}:${sec}`;
+
+            if (warning) {
+                audioWarningEl.innerText = warning;
+                audioWarningEl.classList.remove('hidden');
+            } else {
+                audioWarningEl.classList.add('hidden');
+            }
+            return totalSec;
+        }
+
+        document.getElementById('slideDuration').addEventListener('input', updateDurationEstimate);
+
+        function checkReady() {
+            const btn = document.getElementById('generateBtn');
+            btn.disabled = images.length === 0 || !ffmpeg;
+        }
+
+        // --- CORE GENERATION PROCESS ---
+        document.getElementById('generateBtn').addEventListener('click', async () => {
+            if (!ffmpeg || images.length === 0) return;
+            
             isProcessing = true;
+            document.getElementById('processingOverlay').classList.remove('hidden');
+            document.getElementById('downloadArea').classList.add('hidden');
             
-            // UI Updates
-            generateBtn.disabled = true;
-            generateBtn.classList.add('opacity-50');
-            progressContainer.classList.remove('hidden');
-            downloadArea.classList.add('hidden');
-            outputVideo.classList.add('hidden');
-            previewPlaceholder.classList.remove('hidden');
-
             // Config
-            const fps = 30;
-            const durationPerSlide = parseInt(document.getElementById('durationInput').value) || 4;
-            const resolutionY = parseInt(document.getElementById('resolutionInput').value) || 1080;
-            const resolutionX = (resolutionY / 9) * 16; // 16:9 Aspect Ratio
+            const fps = 24; 
+            const slideDur = parseInt(document.getElementById('slideDuration').value) || 4;
+            const targetWidth = 1280; 
+            const targetHeight = 720;
             
-            // Setup Canvas
-            canvas.width = resolutionX;
-            canvas.height = resolutionY;
-            log(`Canvas diset ke ${resolutionX}x${resolutionY} @ ${fps}fps`);
+            const canvas = document.getElementById('renderCanvas');
+            canvas.width = targetWidth;
+            canvas.height = targetHeight;
+            const ctx = canvas.getContext('2d');
 
-            // Setup MediaRecorder
-            const stream = canvas.captureStream(fps);
-            const mimeTypes = [
-                'video/webm;codecs=vp9',
-                'video/webm;codecs=vp8',
-                'video/webm',
-                'video/mp4'
-            ];
-            
-            let selectedMimeType = mimeTypes.find(type => MediaRecorder.isTypeSupported(type)) || '';
-            
-            if (!selectedMimeType) {
-                alert("Browser Anda tidak mendukung perekaman Canvas. Silakan gunakan Chrome/Firefox/Edge terbaru.");
-                isProcessing = false;
-                return;
+            // 1. Determine Logic Durasi
+            let totalVideoFrames = (images.length * slideDur) * fps;
+            let finalFrames = totalVideoFrames;
+            let mode = 'normal'; 
+
+            if (audioFile && audioFile.duration) {
+                const audioFrames = Math.ceil(audioFile.duration * fps);
+                const bufferFrames = 5 * fps; 
+
+                if (totalVideoFrames > audioFrames) {
+                    finalFrames = audioFrames + bufferFrames;
+                    mode = 'cut';
+                    log(`Mode CUT: Membatasi video di frame ${finalFrames}.`);
+                } else if (totalVideoFrames < audioFrames) {
+                    finalFrames = audioFrames;
+                    mode = 'extend';
+                    log(`Mode EXTEND: Video diperpanjang hingga frame ${finalFrames}.`);
+                }
             }
 
-            log(`Menggunakan Codec: ${selectedMimeType}`);
+            // 2. Render Frames Loop
+            log("Mulai merender frame ke memori...");
             
-            const mediaRecorder = new MediaRecorder(stream, {
-                mimeType: selectedMimeType,
-                videoBitsPerSecond: 5000000 // 5 Mbps
-            });
+            try { ffmpeg.FS('unlink', 'output.mp4'); } catch(e){}
+            try { ffmpeg.FS('unlink', 'audio.mp3'); } catch(e){}
 
-            const chunks = [];
-            mediaRecorder.ondataavailable = (e) => {
-                if (e.data.size > 0) chunks.push(e.data);
-            };
+            const framesPerSlide = slideDur * fps;
+            const transitionFrames = fps * 1; 
 
-            mediaRecorder.onstop = () => {
-                finalizeVideo(chunks, selectedMimeType);
-            };
+            const slideParams = images.map(img => calculateKenBurnsParams(img.bitmap, targetWidth, targetHeight));
 
-            mediaRecorder.start();
-
-            // --- ANIMATION LOOP ---
-            const totalFramesPerSlide = fps * durationPerSlide;
-            const transitionFrames = fps * 1; // 1 detik transisi crossfade
-            const totalSlides = images.length;
-            
-            const slideParams = images.map(img => calculateKenBurnsParams(img, resolutionX, resolutionY));
-
-            async function renderLoop(frameCounter, globalFrame) {
-                const slideDurationFrames = totalFramesPerSlide;
-                const totalAnimationFrames = totalSlides * slideDurationFrames;
-
-                if (globalFrame >= totalAnimationFrames) {
-                    mediaRecorder.stop();
-                    return;
-                }
-
-                // Calculate slide
-                const slideIndex = Math.floor(globalFrame / slideDurationFrames);
-                const localFrame = globalFrame % slideDurationFrames;
-                const progress = localFrame / slideDurationFrames; 
-
-                // Clear Canvas
-                ctx.fillStyle = '#000';
-                ctx.fillRect(0, 0, resolutionX, resolutionY);
-
-                // --- DRAW CURRENT SLIDE ---
-                if (slideIndex < totalSlides) {
-                    const img = images[slideIndex];
-                    const params = slideParams[slideIndex];
-                    
-                    const currentScale = params.startScale + (params.endScale - params.startScale) * progress;
-                    
-                    const sx = params.sx_start + (params.sx_end - params.sx_start) * progress;
-                    const sy = params.sy_start + (params.sy_end - params.sy_start) * progress;
-                    const sw = params.sw_start + (params.sw_end - params.sw_start) * progress;
-                    const sh = params.sh_start + (params.sh_end - params.sh_start) * progress;
-
-                    ctx.drawImage(img, sx, sy, sw, sh, 0, 0, resolutionX, resolutionY);
-                }
-
-                // --- DRAW NEXT SLIDE (CROSSFADE) ---
-                const framesUntilEnd = slideDurationFrames - localFrame;
+            for (let i = 0; i < finalFrames; i++) {
+                const pct = Math.round((i / finalFrames) * 50); 
+                progressBar.style.width = `${pct}%`;
+                progressText.innerText = `Rendering Image ${i}/${finalFrames}`;
                 
-                if (framesUntilEnd <= transitionFrames && slideIndex < totalSlides - 1) {
-                    const nextSlideIndex = slideIndex + 1;
-                    const nextImg = images[nextSlideIndex];
-                    const nextParams = slideParams[nextSlideIndex];
+                ctx.fillStyle = '#000';
+                ctx.fillRect(0, 0, targetWidth, targetHeight);
 
-                    const transitionProgress = 1 - (framesUntilEnd / transitionFrames);
-                    
+                if (i < totalVideoFrames) {
+                    const slideIndex = Math.floor(i / framesPerSlide);
+                    const localFrame = i % framesPerSlide;
+                    const progress = localFrame / framesPerSlide;
+
+                    if (slideIndex < images.length) {
+                        drawKenBurns(ctx, images[slideIndex].bitmap, slideParams[slideIndex], progress, targetWidth, targetHeight);
+                    }
+
+                    const framesUntilEnd = framesPerSlide - localFrame;
+                    if (framesUntilEnd <= transitionFrames && slideIndex < images.length - 1) {
+                        const nextIndex = slideIndex + 1;
+                        const transProgress = 1 - (framesUntilEnd / transitionFrames);
+                        
+                        ctx.save();
+                        ctx.globalAlpha = transProgress;
+                        const nextProgress = transProgress * (transitionFrames / framesPerSlide);
+                        drawKenBurns(ctx, images[nextIndex].bitmap, slideParams[nextIndex], nextProgress, targetWidth, targetHeight);
+                        ctx.restore();
+                    }
+                }
+
+                // 3. Draw Subtitles (Menggunakan Font Pilihan)
+                const currentTime = i / fps;
+                const activeSub = subtitleData.find(s => currentTime >= s.start && currentTime <= s.end);
+                
+                if (activeSub) {
                     ctx.save();
-                    ctx.globalAlpha = transitionProgress;
-
-                    const nextProgress = transitionProgress * (transitionFrames / slideDurationFrames); 
+                    // Gunakan variabel activeFont yang diatur oleh dropdown
+                    ctx.font = `bold 32px ${activeFont}`; 
+                    ctx.textAlign = 'center';
+                    ctx.textBaseline = 'bottom';
+                    ctx.fillStyle = 'white';
+                    ctx.strokeStyle = 'black';
+                    ctx.lineWidth = 4;
+                    ctx.lineJoin = "round";
                     
-                    const n_sx = nextParams.sx_start + (nextParams.sx_end - nextParams.sx_start) * nextProgress;
-                    const n_sy = nextParams.sy_start + (nextParams.sy_end - nextParams.sy_start) * nextProgress;
-                    const n_sw = nextParams.sw_start + (nextParams.sw_end - nextParams.sw_start) * nextProgress;
-                    const n_sh = nextParams.sh_start + (nextParams.sh_end - nextParams.sh_start) * nextProgress;
+                    const lines = getLines(ctx, activeSub.text, targetWidth - 100);
+                    const lineHeight = 40;
+                    const bottomY = targetHeight - 50;
 
-                    ctx.drawImage(nextImg, n_sx, n_sy, n_sw, n_sh, 0, 0, resolutionX, resolutionY);
-                    
+                    lines.reverse().forEach((line, idx) => {
+                        const y = bottomY - (idx * lineHeight);
+                        ctx.strokeText(line, targetWidth / 2, y);
+                        ctx.fillText(line, targetWidth / 2, y);
+                    });
                     ctx.restore();
                 }
 
-                // Update Progress
-                const percent = Math.round((globalFrame / totalAnimationFrames) * 100);
-                progressBar.style.width = `${percent}%`;
-                progressPercent.innerText = `${percent}%`;
-                statusText.innerText = `Rendering Frame ${globalFrame}/${totalAnimationFrames}`;
-
-                requestAnimationFrame(() => renderLoop(frameCounter + 1, globalFrame + 1));
+                const blob = await new Promise(r => canvas.toBlob(r, 'image/jpeg', 0.8));
+                const arrayBuffer = await blob.arrayBuffer();
+                const fileName = `img_${i.toString().padStart(5, '0')}.jpg`;
+                ffmpeg.FS('writeFile', fileName, new Uint8Array(arrayBuffer));
+                
+                if (i % 50 === 0) await new Promise(r => setTimeout(r, 0)); 
             }
 
-            log("Memulai proses rendering...");
-            renderLoop(0, 0);
+            // 3. Audio Handling
+            let audioCmdInput = [];
+            
+            if (audioFile) {
+                document.getElementById('processStatus').innerText = "Memproses Audio...";
+                const audioData = await fetchFile(audioFile);
+                ffmpeg.FS('writeFile', 'audio.mp3', audioData);
+                audioCmdInput = ['-i', 'audio.mp3'];
+            }
+
+            // 4. Run FFmpeg Command
+            document.getElementById('processStatus').innerText = "Encoding Video (MP4)...";
+            document.getElementById('processDetail').innerText = "Menyatukan ribuan gambar menjadi video.";
+            progressBar.style.width = '75%';
+            progressText.innerText = "Encoding...";
+
+            log("Menjalankan perintah FFmpeg...");
+            
+            const argsSequence = [
+                '-framerate', fps.toString(),
+                '-i', 'img_%05d.jpg',
+                ...audioCmdInput,
+                '-c:v', 'libx264',
+                '-pix_fmt', 'yuv420p',
+                '-preset', 'ultrafast',
+                'output.mp4'
+            ];
+
+            await ffmpeg.run(...argsSequence);
+
+            // 5. Retrieve & Cleanup
+            progressBar.style.width = '100%';
+            progressText.innerText = "Selesai!";
+            
+            const data = ffmpeg.FS('readFile', 'output.mp4');
+            
+            log("Membersihkan memori...");
+            for (let i = 0; i < finalFrames; i++) {
+                try {
+                    ffmpeg.FS('unlink', `img_${i.toString().padStart(5, '0')}.jpg`);
+                } catch(e){}
+            }
+
+            const videoBlob = new Blob([data.buffer], { type: 'video/mp4' });
+            const videoUrl = URL.createObjectURL(videoBlob);
+            
+            const outputVideo = document.getElementById('outputVideo');
+            outputVideo.src = videoUrl;
+            outputVideo.classList.remove('hidden');
+            document.getElementById('previewPlaceholder').classList.add('hidden');
+            document.getElementById('processingOverlay').classList.add('hidden');
+
+            const dlLink = document.getElementById('downloadLink');
+            dlLink.href = videoUrl;
+            dlLink.download = `static-motion-v2_${Date.now()}.mp4`;
+            document.getElementById('downloadArea').classList.remove('hidden');
+
+            log("Render selesai. Video siap.");
+            isProcessing = false;
+        });
+
+        // --- Helper: Draw Ken Burns ---
+        function drawKenBurns(ctx, img, params, progress, cw, ch) {
+            const scale = params.startScale + (params.endScale - params.startScale) * progress;
+            const sx = params.sx_start + (params.sx_end - params.sx_start) * progress;
+            const sy = params.sy_start + (params.sy_end - params.sy_start) * progress;
+            const sw = params.sw_start + (params.sw_end - params.sw_start) * progress;
+            const sh = params.sh_start + (params.sh_end - params.sh_start) * progress;
+            ctx.drawImage(img, sx, sy, sw, sh, 0, 0, cw, ch);
         }
 
-        // --- Ken Burns Calculation Logic ---
         function calculateKenBurnsParams(img, canvasW, canvasH) {
             const imgRatio = img.width / img.height;
             const canvasRatio = canvasW / canvasH;
-            
-            // Base Crop Size
             let cropW, cropH;
+
             if (imgRatio > canvasRatio) {
                 cropH = img.height;
                 cropW = cropH * canvasRatio;
@@ -530,19 +698,16 @@
                 cropH = cropW / canvasRatio;
             }
 
-            const zoomIntensity = 0.15 + (Math.random() * 0.10); 
-            const isZoomIn = Math.random() > 0.5;
-
+            const zoomIntensity = 0.15; 
             const bigRect = { w: cropW, h: cropH };
             const smallRect = { w: cropW * (1 - zoomIntensity), h: cropH * (1 - zoomIntensity) };
-
+            
             const anchorX = Math.random(); 
             const anchorY = Math.random();
-
-            const maxOffsetX = img.width - cropW; 
+            
+            const maxOffsetX = img.width - cropW;
             const maxOffsetY = img.height - cropH;
-
-            const baseX = maxOffsetX / 2; 
+            const baseX = maxOffsetX / 2;
             const baseY = maxOffsetY / 2;
 
             const bigRectX = baseX;
@@ -550,9 +715,10 @@
 
             const diffW = bigRect.w - smallRect.w;
             const diffH = bigRect.h - smallRect.h;
-            
             const smallRectX = bigRectX + (diffW * anchorX);
             const smallRectY = bigRectY + (diffH * anchorY);
+
+            const isZoomIn = Math.random() > 0.5;
 
             if (isZoomIn) {
                 return {
@@ -569,32 +735,24 @@
             }
         }
 
-        // --- Finalize & Download ---
-        function finalizeVideo(chunks, mimeType) {
-            log("Rendering selesai. Menyusun file video...");
-            const blob = new Blob(chunks, { type: mimeType });
-            const url = URL.createObjectURL(blob);
-            
-            outputVideo.src = url;
-            outputVideo.classList.remove('hidden');
-            previewPlaceholder.classList.add('hidden');
-            
-            downloadLink.href = url;
-            
-            const ext = mimeType.includes('mp4') ? 'mp4' : 'webm';
-            downloadLink.download = `static-motion-pic_${Date.now()}.${ext}`;
-            
-            downloadArea.classList.remove('hidden');
-            progressContainer.classList.add('hidden');
-            
-            generateBtn.disabled = false;
-            generateBtn.classList.remove('opacity-50');
-            generateBtn.innerText = 'Generate Video Baru';
-            
-            isProcessing = false;
-            log(`Video siap! Ukuran: ${(blob.size / 1024 / 1024).toFixed(2)} MB`);
-        }
+        function getLines(ctx, text, maxWidth) {
+            var words = text.split(" ");
+            var lines = [];
+            var currentLine = words[0];
 
+            for (var i = 1; i < words.length; i++) {
+                var word = words[i];
+                var width = ctx.measureText(currentLine + " " + word).width;
+                if (width < maxWidth) {
+                    currentLine += " " + word;
+                } else {
+                    lines.push(currentLine);
+                    currentLine = word;
+                }
+            }
+            lines.push(currentLine);
+            return lines;
+        }
     </script>
 </body>
 </html>
