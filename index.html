@@ -7,21 +7,22 @@
     
     <!-- Script Hack untuk SharedArrayBuffer (Wajib ada file coi-serviceworker.js di folder yang sama) -->
     <script src="coi-serviceworker.js"></script>
+    <!-- Load FFmpeg scripts from local project root to avoid external download -->
+    <script src="./ffmpeg.min.js"></script>
+    <script src="./ffmpeg-core.js"></script>
 
     <!-- Tailwind CSS -->
     <script src="https://cdn.tailwindcss.com"></script>
-    
-    <!-- FFmpeg.wasm -->
-    <script src="https://unpkg.com/@ffmpeg/ffmpeg@0.11.6/dist/ffmpeg.min.js"></script>
-    <script src="https://unpkg.com/@ffmpeg/core@0.11.6/dist/ffmpeg-core.js"></script>
 
     <style>
         @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;800&display=swap');
         
-        body { font-family: 'Inter', sans-serif; background-color: #0f172a; color: #e2e8f0; }
-        ::-webkit-scrollbar { width: 8px; }
-        ::-webkit-scrollbar-track { background: #1e293b; }
-        ::-webkit-scrollbar-thumb { background: #475569; border-radius: 4px; }
+        body {
+            font-family: 'Inter', sans-serif; background-color: #0f172a; color: #e2e8f0;
+            ::-webkit-scrollbar { width: 8px; }
+            ::-webkit-scrollbar-track { background: #1e293b; }
+            ::-webkit-scrollbar-thumb { background: #475569; border-radius: 4px; }
+        }
 
         .glass-panel {
             background: rgba(30, 41, 59, 0.7);
@@ -159,7 +160,7 @@
                         </div>
                     </div>
 
-                    <div id="processingOverlay" class="absolute inset-0 bg-black/80 z-20 hidden flex-col items-center justify-center p-8 text-center">
+                    <div id="processingOverlay" class="absolute inset-0 bg-black/80 z-20 hidden flex flex-col items-center justify-center p-8 text-center">
                         <div class="loader w-10 h-10 mb-4"></div>
                         <h3 class="text-lg font-bold text-white mb-1" id="processStatus">Merender Frame...</h3>
                         <p class="text-xs text-slate-400 mb-4" id="processDetail">Mohon tunggu, ini memerlukan CPU tinggi.</p>
@@ -186,21 +187,34 @@
 
     <!-- Footer Credit -->
     <footer class="text-center text-slate-500 text-xs py-4">
-        <p>Static Motion-Pic &copy; 2024. Dibuat dengan cinta dan kode.</p>
+        <!-- CREDIT: Tuliskan credit project di baris-baris berikut (nama, lisensi font, link). -->
+        <p>Static Motion-Pic &copy; 2024. Dibuat dengan Gemini</p>
         <p class="mt-1">
             <span class="opacity-70">Credits Font:</span> 
             <!-- Ganti bagian ini sesuai lisensi font yang Anda pakai -->
-            <a href="#" class="hover:text-emerald-400 transition">Roboto by Google</a> • 
-            <a href="#" class="hover:text-emerald-400 transition">Bebas Neue by Ryoichi Tsunekawa</a>
+            <a href="https://fonts.google.com/specimen/Roboto" class="hover:text-emerald-400 transition">Roboto by Google</a> • 
+            <a href="https://www.dafont.com/bebas-neue.font"   class="hover:text-emerald-400 transition">Bebas Neue by Ryoichi Tsunekawa</a> • 
+            <a href="https://justfreefonts.com/fonts/segotia"  class="hover:text-emerald-400 transition">Segotia by Dominic Stanley</a>
         </p>
     </footer>
 
     <script>
-        const { createFFmpeg, fetchFile } = FFmpeg;
+        // Robust initialization: gunakan global `createFFmpeg`/`fetchFile` jika tersedia,
+        // atau fallback ke `FFmpeg.createFFmpeg` jika bundle mengekspor `FFmpeg`.
+        const createFFmpeg = window.createFFmpeg || (window.FFmpeg && window.FFmpeg.createFFmpeg);
+        const fetchFile = window.fetchFile || (window.FFmpeg && window.FFmpeg.fetchFile);
         
         /* * =================================================================
          * [AREA KONFIGURASI FONT PROYEK]
-         * Di sini tempat Anda mendaftarkan font lokal yang ada di komputer/server Anda.
+         * DI SINI: Tambahkan/daftarkan font custom (lokal .ttf) atau font project
+         * - Untuk font lokal (.ttf) pada proyek:
+         *   1) Taruh file .ttf di folder proyek, mis. `fonts/MyFont-Regular.ttf`
+         *   2) Tambahkan objek pada `availableFonts`, contoh:
+         *      { name: "MyFont (Local)", type: "file", url: "fonts/MyFont-Regular.ttf", fontFamily: "MyFont" }
+         *   3) Pilih font dari dropdown; script akan memuat via FontFace dan dapat dipakai di canvas.
+         * - Untuk upload manual dari UI: gunakan tombol "Upload Font (.ttf)" — file akan dibuatkan Blob URL otomatis.
+         * - Untuk font CDN: tambahkan @import di <style> atau gunakan `new FontFace(name, 'url(...)')`.
+         * Contoh objek: { name: "Bebas Neue", type: "file", url: "fonts/BebasNeue-Regular.ttf", fontFamily: "BebasNeue" }
          * =================================================================
          */
         
@@ -222,6 +236,12 @@
                 type: "system", 
                 value: "Courier New, monospace" 
             },
+            {
+                name: "Segotia (Reguler)",
+                type: "file",
+                url: "Segotia-Regular.ttf",
+                fontFamily: "Segotia"
+            }
             
             // Opsi 2: Font Lokal (File dalam proyek Anda)
             // UNCOMMENT bagian di bawah ini jika Anda sudah menaruh file .ttf di folder proyek
@@ -247,6 +267,7 @@
         let audioFile = null;
         let subtitleData = [];
         let isProcessing = false;
+        const DEFAULT_FPS = 24; // gunakan juga di estimasi durasi
 
         // --- DOM Elements ---
         const logEl = document.getElementById('consoleLog');
@@ -282,7 +303,9 @@
                 // Logic memuat font lokal dari URL (folder proyek)
                 try {
                     log(`Memuat font: ${selected.name}...`);
-                    const fontFace = new FontFace(selected.fontFamily, `url(${selected.url})`);
+                        // wrap URL in quotes and use encodeURI to handle spaces/special chars
+                        const fontUrl = selected.url && typeof selected.url === 'string' ? `url("${encodeURI(selected.url)}")` : selected.url;
+                        const fontFace = new FontFace(selected.fontFamily, fontUrl);
                     await fontFace.load();
                     document.fonts.add(fontFace);
                     activeFont = selected.fontFamily;
@@ -301,22 +324,25 @@
             const file = e.target.files[0];
             if (file) {
                 try {
-                    const arrayBuffer = await file.arrayBuffer();
+                    // Buat Blob URL lalu muat via FontFace('name', `url(<blob>)`)
+                    const url = URL.createObjectURL(file);
                     const fontName = 'UploadedFont_' + Date.now();
-                    const fontFace = new FontFace(fontName, arrayBuffer);
+                    // Use quoted Blob URL so FontFace parser accepts spaces in filename
+                    const fontFace = new FontFace(fontName, `url("${url}")`);
                     await fontFace.load();
                     document.fonts.add(fontFace);
-                    
+
                     // Tambahkan ke dropdown dan pilih otomatis
                     const newOption = document.createElement('option');
                     newOption.text = `[Uploaded] ${file.name}`;
                     newOption.value = 'uploaded_manual';
                     fontSelect.appendChild(newOption);
                     fontSelect.value = 'uploaded_manual';
-                    
+
                     activeFont = fontName;
                     log(`Font custom diupload: ${file.name}`);
                 } catch (err) {
+                    console.error(err);
                     log("File font rusak atau tidak didukung.");
                 }
             }
@@ -325,6 +351,15 @@
         // --- Init FFmpeg ---
         async function loadFFmpeg() {
             try {
+                if (!createFFmpeg || !fetchFile) {
+                    console.error('FFmpeg API tidak ditemukan (createFFmpeg/fetchFile).');
+                    document.getElementById('ffmpegLoader').innerHTML = `
+                        <div class="text-red-500 font-bold">FFmpeg API tidak ditemukan!</div>
+                        <p class="text-xs text-white mt-2">Pastikan script FFmpeg dimuat dari CDN yang valid dan browser mendukung SharedArrayBuffer (coi-serviceworker).</p>
+                    `;
+                    return;
+                }
+
                 ffmpeg = createFFmpeg({ log: false }); 
                 await ffmpeg.load();
                 document.getElementById('ffmpegLoader').classList.add('hidden');
@@ -333,7 +368,7 @@
                 console.error(e);
                 document.getElementById('ffmpegLoader').innerHTML = `
                     <div class="text-red-500 font-bold">Gagal memuat FFmpeg!</div>
-                    <p class="text-xs text-white mt-2">Pastikan browser mendukung SharedArrayBuffer (coi-serviceworker).</p>
+                    <p class="text-xs text-white mt-2">Pastikan browser mendukung SharedArrayBuffer (coi-serviceworker) dan koneksi internet stabil.</p>
                 `;
             }
         }
@@ -363,9 +398,62 @@
             }
             images.forEach((img, idx) => {
                 const div = document.createElement('div');
-                div.className = 'w-14 h-14 bg-cover bg-center rounded border border-slate-600 relative group';
+                div.className = 'w-14 h-14 bg-cover bg-center rounded border border-slate-600 relative group overflow-hidden';
                 div.style.backgroundImage = `url(${img.thumbUrl})`;
-                div.innerHTML = `<span class="absolute bottom-0 right-0 bg-black/70 text-white text-[9px] px-1">${idx+1}</span>`;
+                div.setAttribute('draggable', 'true');
+                div.dataset.index = idx;
+
+                // Controls: delete button + index badge
+                div.innerHTML = `
+                    <button class="delete-btn absolute top-0 right-0 m-1 bg-black/60 text-white text-[10px] rounded-full w-5 h-5 flex items-center justify-center opacity-0 group-hover:opacity-100">✕</button>
+                    <span class="absolute bottom-0 right-0 bg-black/70 text-white text-[9px] px-1">${idx+1}</span>
+                `;
+
+                // Delete handler
+                const delBtn = div.querySelector('.delete-btn');
+                delBtn.addEventListener('click', (e) => {
+                    e.stopPropagation();
+                    const i = parseInt(div.dataset.index, 10);
+                    if (!isNaN(i)) {
+                        const removed = images.splice(i, 1)[0];
+                        if (removed && removed.thumbUrl) try { URL.revokeObjectURL(removed.thumbUrl); } catch(e){}
+                        renderFileList();
+                        updateDurationEstimate();
+                        checkReady();
+                        log(`Gambar ${i+1} dihapus.`);
+                    }
+                });
+
+                // Drag & drop reorder
+                div.addEventListener('dragstart', (e) => {
+                    e.dataTransfer.setData('text/plain', div.dataset.index);
+                    div.classList.add('opacity-60');
+                });
+                div.addEventListener('dragend', (e) => {
+                    div.classList.remove('opacity-60');
+                });
+
+                div.addEventListener('dragover', (e) => {
+                    e.preventDefault();
+                    div.classList.add('ring-2', 'ring-blue-400');
+                });
+                div.addEventListener('dragleave', (e) => {
+                    div.classList.remove('ring-2', 'ring-blue-400');
+                });
+                div.addEventListener('drop', (e) => {
+                    e.preventDefault();
+                    div.classList.remove('ring-2', 'ring-blue-400');
+                    const src = parseInt(e.dataTransfer.getData('text/plain'), 10);
+                    const dest = parseInt(div.dataset.index, 10);
+                    if (isNaN(src) || isNaN(dest) || src === dest) return;
+                    const item = images.splice(src, 1)[0];
+                    let insertIndex = dest;
+                    if (src < dest) insertIndex = dest; // after removal, dest shifts left — inserting at dest places after correct spot
+                    images.splice(insertIndex, 0, item);
+                    renderFileList();
+                    log(`Gambar dipindah dari ${src+1} ke ${insertIndex+1}.`);
+                });
+
                 fileList.appendChild(div);
             });
         }
@@ -388,6 +476,34 @@
             }
             log(`Menambahkan ${files.length} gambar.`);
             e.target.value = ''; 
+        });
+
+        // Drag & Drop support: langsung drop gambar ke `#dropZone`
+        const dropZone = document.getElementById('dropZone');
+        ['dragenter', 'dragover'].forEach(evt => {
+            dropZone.addEventListener(evt, (e) => {
+                e.preventDefault();
+                dropZone.classList.add('border-blue-500');
+            });
+        });
+        ['dragleave', 'drop'].forEach(evt => {
+            dropZone.addEventListener(evt, (e) => {
+                e.preventDefault();
+                dropZone.classList.remove('border-blue-500');
+            });
+        });
+
+        dropZone.addEventListener('drop', async (e) => {
+            e.preventDefault();
+            const dtFiles = Array.from(e.dataTransfer.files || []);
+            const imgFiles = dtFiles.filter(f => f.type && f.type.startsWith('image/'));
+            if (imgFiles.length === 0) return;
+            for (const file of imgFiles) {
+                const bitmap = await createImageBitmap(file);
+                const thumbUrl = URL.createObjectURL(file);
+                addImage(bitmap, thumbUrl);
+            }
+            log(`Menambahkan ${imgFiles.length} gambar via drag & drop.`);
         });
 
         document.getElementById('addUrlBtn').addEventListener('click', async () => {
@@ -426,17 +542,26 @@
 
         // --- Subtitle Parser ---
         function parseSRT(text) {
-            // PERBAIKAN: Menggunakan new RegExp() dengan string escaping untuk menghindari error parser pada regex literal
-            const pattern = new RegExp("(\\d+)\\n(\\d{2}:\\d{2}:\\d{2},\\d{3}) --> (\\d{2}:\\d{2}:\\d{2},\\d{3})\\n([\\s\\S]*?)(?=\\n\\n|\\n*$)", "g");
-            
+            // Robust SRT parser: support CRLF or LF, ignore BOM, and handle multiple blank lines
+            if (!text) return [];
+            // normalize line endings
+            text = text.replace(/\r\n?/g, "\n").replace(/^\uFEFF/, '');
+
+            const blocks = text.split(/\n\n+/);
             const result = [];
-            let match;
-            while ((match = pattern.exec(text)) !== null) {
-                result.push({
-                    start: timeToSeconds(match[2]),
-                    end: timeToSeconds(match[3]),
-                    text: match[4].trim()
-                });
+            for (const block of blocks) {
+                const lines = block.split('\n').filter(Boolean);
+                if (lines.length >= 2) {
+                    // lines[0] may be index number
+                    const timeLine = lines[1].trim();
+                    // avoid literal `-->` in source (may be treated as HTML comment close);
+                    const arrow = '--' + '>';
+                    const m = timeLine.match(new RegExp('(\\d{2}:\\d{2}:\\d{2},\\d{3})\\s*' + arrow + '\\s*(\\d{2}:\\d{2}:\\d{2},\\d{3})'));
+                    if (m) {
+                        const textLines = lines.slice(2).join('\n');
+                        result.push({ start: timeToSeconds(m[1]), end: timeToSeconds(m[2]), text: textLines.trim() });
+                    }
+                }
             }
             return result;
         }
@@ -465,20 +590,29 @@
         function updateDurationEstimate() {
             const slideDur = parseInt(document.getElementById('slideDuration').value) || 4;
             const imgCount = images.length;
-            let totalSec = imgCount * slideDur;
+            const fps = DEFAULT_FPS;
+            const framesPerSlide = slideDur * fps;
+            const transitionFrames = Math.max(1, Math.round(fps * 1));
+            const slideStep = Math.max(1, framesPerSlide - transitionFrames);
+
+            // total frames akan mengikuti logika render (dengan overlap/transisi)
+            let totalFrames = imgCount > 0 ? slideStep * (imgCount - 1) + framesPerSlide : 0;
             let warning = "";
 
             if (audioFile && audioFile.duration) {
-                const audioSec = audioFile.duration;
-                if (totalSec > audioSec) {
-                    totalSec = audioSec + 5; 
+                const audioFrames = Math.ceil(audioFile.duration * fps);
+                const bufferFrames = 5 * fps;
+
+                if (totalFrames > audioFrames) {
+                    totalFrames = audioFrames + bufferFrames;
                     warning = "Video > Audio: Durasi dipotong menjadi Audio + 5 detik.";
-                } else if (totalSec < audioSec) {
-                    totalSec = audioSec; 
+                } else if (totalFrames < audioFrames) {
+                    totalFrames = audioFrames;
                     warning = "Video < Audio: Layar hitam akan ditambahkan di akhir.";
                 }
             }
 
+            const totalSec = Math.floor(totalFrames / fps);
             const min = Math.floor(totalSec / 60).toString().padStart(2, '0');
             const sec = Math.floor(totalSec % 60).toString().padStart(2, '0');
             totalDurationEl.innerText = `${min}:${sec}`;
@@ -489,7 +623,7 @@
             } else {
                 audioWarningEl.classList.add('hidden');
             }
-            return totalSec;
+            return totalFrames / fps;
         }
 
         document.getElementById('slideDuration').addEventListener('input', updateDurationEstimate);
@@ -508,7 +642,7 @@
             document.getElementById('downloadArea').classList.add('hidden');
             
             // Config
-            const fps = 24; 
+            const fps = DEFAULT_FPS;
             const slideDur = parseInt(document.getElementById('slideDuration').value) || 4;
             const targetWidth = 1280; 
             const targetHeight = 720;
@@ -518,14 +652,19 @@
             canvas.height = targetHeight;
             const ctx = canvas.getContext('2d');
 
-            // 1. Determine Logic Durasi
-            let totalVideoFrames = (images.length * slideDur) * fps;
+            // 1. Determine Logic Durasi & Slide Timing
+            const framesPerSlide = slideDur * fps;
+            const transitionFrames = Math.max(1, Math.round(fps * 1));
+            const slideStep = Math.max(1, framesPerSlide - transitionFrames); // overlap per slide
+
+            // total frames when slides overlap by `transitionFrames`
+            let totalVideoFrames = images.length > 0 ? slideStep * (images.length - 1) + framesPerSlide : 0;
             let finalFrames = totalVideoFrames;
-            let mode = 'normal'; 
+            let mode = 'normal';
 
             if (audioFile && audioFile.duration) {
                 const audioFrames = Math.ceil(audioFile.duration * fps);
-                const bufferFrames = 5 * fps; 
+                const bufferFrames = 5 * fps;
 
                 if (totalVideoFrames > audioFrames) {
                     finalFrames = audioFrames + bufferFrames;
@@ -538,42 +677,43 @@
                 }
             }
 
-            // 2. Render Frames Loop
+            // 2. Render Frames Loop (menggunakan overlap step sehingga KenBurns tidak "melompat")
             log("Mulai merender frame ke memori...");
-            
+
             try { ffmpeg.FS('unlink', 'output.mp4'); } catch(e){}
             try { ffmpeg.FS('unlink', 'audio.mp3'); } catch(e){}
 
-            const framesPerSlide = slideDur * fps;
-            const transitionFrames = fps * 1; 
-
             const slideParams = images.map(img => calculateKenBurnsParams(img.bitmap, targetWidth, targetHeight));
+            const endFadeSeconds = 2;
+            const endFadeFrames = endFadeSeconds * fps;
 
             for (let i = 0; i < finalFrames; i++) {
-                const pct = Math.round((i / finalFrames) * 50); 
+                const pct = Math.round((i / finalFrames) * 50);
                 progressBar.style.width = `${pct}%`;
                 progressText.innerText = `Rendering Image ${i}/${finalFrames}`;
-                
+
                 ctx.fillStyle = '#000';
                 ctx.fillRect(0, 0, targetWidth, targetHeight);
 
                 if (i < totalVideoFrames) {
-                    const slideIndex = Math.floor(i / framesPerSlide);
-                    const localFrame = i % framesPerSlide;
-                    const progress = localFrame / framesPerSlide;
+                    const slideIndex = Math.floor(i / slideStep);
+                    const localFrame = i - (slideIndex * slideStep);
+                    const progress = Math.min(localFrame / framesPerSlide, 1);
 
                     if (slideIndex < images.length) {
                         drawKenBurns(ctx, images[slideIndex].bitmap, slideParams[slideIndex], progress, targetWidth, targetHeight);
                     }
 
+                    // Crossfade ke slide berikutnya saat berada pada area transition
                     const framesUntilEnd = framesPerSlide - localFrame;
                     if (framesUntilEnd <= transitionFrames && slideIndex < images.length - 1) {
                         const nextIndex = slideIndex + 1;
-                        const transProgress = 1 - (framesUntilEnd / transitionFrames);
-                        
+                        const transLocal = framesPerSlide - framesUntilEnd; // 0..transitionFrames
+                        const transProgress = transLocal / transitionFrames;
+
                         ctx.save();
                         ctx.globalAlpha = transProgress;
-                        const nextProgress = transProgress * (transitionFrames / framesPerSlide);
+                        const nextProgress = Math.min(transLocal / framesPerSlide, 1);
                         drawKenBurns(ctx, images[nextIndex].bitmap, slideParams[nextIndex], nextProgress, targetWidth, targetHeight);
                         ctx.restore();
                     }
@@ -603,6 +743,17 @@
                         ctx.strokeText(line, targetWidth / 2, y);
                         ctx.fillText(line, targetWidth / 2, y);
                     });
+                    ctx.restore();
+                }
+
+                // 4. Fade-to-black for last `endFadeSeconds` seconds
+                if (finalFrames > 0 && i >= finalFrames - endFadeFrames) {
+                    const fadeIndex = i - (finalFrames - endFadeFrames);
+                    const alpha = Math.min(1, (fadeIndex + 1) / endFadeFrames);
+                    ctx.save();
+                    ctx.globalAlpha = alpha;
+                    ctx.fillStyle = '#000';
+                    ctx.fillRect(0, 0, targetWidth, targetHeight);
                     ctx.restore();
                 }
 
@@ -677,7 +828,6 @@
 
         // --- Helper: Draw Ken Burns ---
         function drawKenBurns(ctx, img, params, progress, cw, ch) {
-            const scale = params.startScale + (params.endScale - params.startScale) * progress;
             const sx = params.sx_start + (params.sx_end - params.sx_start) * progress;
             const sy = params.sy_start + (params.sy_end - params.sy_start) * progress;
             const sw = params.sw_start + (params.sw_end - params.sw_start) * progress;
